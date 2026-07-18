@@ -34,6 +34,10 @@ jobs:
       contents: read
     environment: staging
     steps:
+      - name: Debug OIDC token claims
+        run: |
+          JWT=$(curl -sSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r '.value')
+          echo $JWT | cut -d. -f2 | base64 -d | jq .
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::677276118863:role/cicdtest6_role_staging
