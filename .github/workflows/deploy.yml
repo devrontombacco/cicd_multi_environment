@@ -1,0 +1,67 @@
+name: Build and Promote through Environments
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    environment: dev
+    outputs:
+      image_tag: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t cicd_multi_environment:${{ github.sha }} .
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::677276118863:role/cicdtest6_role_dev
+          aws-region: eu-west-1
+      - id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - run: docker tag cicd_multi_environment:${{ github.sha }} ${{ steps.login-ecr.outputs.registry }}/cicd_multi_environment:${{ github.sha }}
+      - run: docker push ${{ steps.login-ecr.outputs.registry }}/cicd_multi_environment:${{ github.sha }}
+
+  deploy-staging:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    environment: staging
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::677276118863:role/cicdtest6_role_staging
+          aws-region: eu-west-1
+      - id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Promote image to staging tag
+        run: |
+          docker pull ${{ steps.login-ecr.outputs.registry }}/cicd_multi_environment:${{ needs.build.outputs.image_tag }}
+          docker tag ${{ steps.login-ecr.outputs.registry }}/cicd_multi_environment:${{ needs.build.outputs.image_tag }} ${{ steps.login-ecr.outputs.registry }}/cicd_multi_environment:staging
+          docker push ${{ steps.login-ecr.outputs.registry }}/cicd_multi_environment:staging
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    environment: production
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::677276118863:role/cicdtest6_role_production
+          aws-region: eu-west-1
+      - id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+      - name: Promote image to production tag
+        run: |
+          docker pull ${{ steps.login-ecr.outputs.registry }}/cicd_multi_environment:${{ needs.build.outputs.image_tag }}
+          docker tag ${{ steps.login-ecr.outputs.registry }}/cicd_multi_environment:${{ needs.build.outputs.image_tag }} ${{ steps.login-ecr.outputs.registry }}/cicd_multi_environment:production
+          docker push ${{ steps.login-ecr.outputs.registry }}/cicd_multi_environment:production
