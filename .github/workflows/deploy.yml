@@ -51,7 +51,7 @@ jobs:
           docker push ${{ steps.login-ecr.outputs.registry }}/cicd_multi_environment:staging
 
   deploy-production:
-    needs: deploy-staging
+    needs: [deploy-staging, build]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
